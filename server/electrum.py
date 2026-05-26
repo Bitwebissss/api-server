@@ -40,6 +40,7 @@ class ElectrumClient:
 
     def make_ssl_context(self):
         ctx = ssl.create_default_context()
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         if not self.verify_ssl:
             ctx.check_hostname = False
             ctx.verify_mode    = ssl.CERT_NONE
@@ -254,6 +255,7 @@ class ElectrumSubscriber:
     def open_connection(self):
         self.close_connection()
         ctx = ssl.create_default_context()
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         if not self.verify_ssl:
             ctx.check_hostname = False
             ctx.verify_mode    = ssl.CERT_NONE
