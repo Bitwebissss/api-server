@@ -193,7 +193,6 @@ sudo certbot --nginx -d your.domain.com
 ## Configuration
 
 All settings are read from a `.env` file in the project root (via `python-dotenv`).
-If a variable is missing, `config.py` falls back to the built-in default.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -278,7 +277,6 @@ P2SH), bech32 P2WPKH/P2WSH with the `web` HRP, and script-hash derivation.
 ```
 .
 ├── app.py              Entry point (gevent monkey-patch + gunicorn target)
-├── config.py           Configuration loader (excluded from git — create manually on deploy)
 ├── requirements.txt    Python dependencies
 ├── env.example         Configuration template
 ├── server/

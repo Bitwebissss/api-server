@@ -1,9 +1,9 @@
 """
 ElectrumX JSON-RPC client over TLS.
 
-- ElectrumClient     — single thread-safe connection with auto-reconnect
-- ElectrumPool       — fixed pool of N clients, round-robin via queue
-- ElectrumSubscriber — dedicated connection for server-push notifications
+- ElectrumClient      - single thread-safe connection with auto-reconnect
+- ElectrumPool        - fixed pool of N clients, round-robin via queue
+- ElectrumSubscriber  - dedicated connection for server-push notifications
 """
 
 import json
@@ -133,7 +133,7 @@ class ElectrumClient:
                     self.open_connection()
                 return self.send_rpc(method, list(params))
             except (OSError, ConnectionError, ssl.SSLError) as exc:
-                log.warning("Socket error on %s (%s) — reconnecting", method, exc)
+                log.warning("Socket error on %s (%s)  - reconnecting", method, exc)
                 self.open_connection()
                 return self.send_rpc(method, list(params))
 
@@ -150,7 +150,7 @@ class ElectrumClient:
                     self.open_connection()
                 return self.send_rpc_batch(requests)
             except (OSError, ConnectionError, ssl.SSLError) as exc:
-                log.warning("Socket error on batch (%s) — reconnecting", exc)
+                log.warning("Socket error on batch (%s)  - reconnecting", exc)
                 self.open_connection()
                 return self.send_rpc_batch(requests)
 
@@ -248,7 +248,7 @@ class ElectrumSubscriber:
                 self.open_connection()
                 self.read_loop()
             except Exception as exc:
-                log.warning("Subscriber error: %s — reconnecting in 5 s", exc)
+                log.warning("Subscriber error: %s  - reconnecting in 5 s", exc)
                 self.close_connection()
                 time.sleep(5)
 
@@ -287,7 +287,7 @@ class ElectrumSubscriber:
             try:
                 chunk = self._sock.recv(4096)
             except socket.timeout:
-                log.debug("Subscriber idle — sending server.ping")
+                log.debug("Subscriber idle  - sending server.ping")
                 self.send_message("server.ping", [])
                 continue
 
