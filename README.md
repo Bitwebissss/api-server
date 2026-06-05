@@ -19,7 +19,7 @@ Browser / Wallet
   Gunicorn + gevent  (app.py → server/)
       │  ElectrumX JSON-RPC over TLS
       ▼
-  ElectrumX node  (electrumx.bitwebcore.net:20002)
+  ElectrumX node  (electrumx.example.com:20002)
 ```
 
 The server maintains:
@@ -180,8 +180,6 @@ ExecStart=/opt/bitweb-api/venv/bin/gunicorn \
     --workers 1 \
     --timeout 0 \
     app:app
-Restart=always
-RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
