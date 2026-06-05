@@ -51,7 +51,7 @@ The server maintains:
 
 ### WebSocket (Socket.IO)
 
-Connect to `wss://api.bitwebcore.net/socket.io/`.
+Connect to `wss://api.example.com/socket.io/`.
 
 **Client → Server**
 
@@ -97,27 +97,7 @@ python-dotenv
 
 ---
 
-## Quick Install
-
-The included `deploy.sh` script handles everything interactively:
-
-```bash
-sudo bash deploy.sh
-```
-
-It will ask for:
-- Deploy user (creates a dedicated system user if needed)
-- Install directory
-- Domain name
-- ElectrumX host / port / SSL settings
-- Secret key (or generate one automatically)
-- Fixed fee in satoshis
-- Whether to configure Nginx
-- Whether to run Certbot for Let's Encrypt
-
----
-
-## Manual Install
+## Install
 
 ### 1. Create a dedicated user
 
@@ -149,7 +129,7 @@ sudo -u bitweb bash -c "
 Copy the example and edit:
 
 ```bash
-sudo cp /opt/bitweb-api/.env.example /opt/bitweb-api/.env
+sudo cp /opt/bitweb-api/env.example /opt/bitweb-api/.env
 sudo nano /opt/bitweb-api/.env
 sudo chown bitweb:bitweb /opt/bitweb-api/.env
 sudo chmod 600 /opt/bitweb-api/.env
@@ -193,11 +173,11 @@ sudo systemctl status bitweb-api
 
 ### 6. Configure Nginx
 
-See the included `api.bitwebcore.txt` for a production-ready Nginx config.
-Replace `api.bitwebcore.net` with your domain.
+See the included `api2.bitwebcore.example` for a production-ready Nginx config.
+Replace `api.example.com` with your domain.
 
 ```bash
-sudo cp api.bitwebcore.txt /etc/nginx/conf.d/bitweb-api.conf
+sudo cp api2.bitwebcore.example /etc/nginx/conf.d/bitweb-api.conf
 # edit domain
 sudo nginx -t && sudo systemctl reload nginx
 ```
@@ -221,7 +201,7 @@ If a variable is missing, `config.py` falls back to the built-in default.
 | `HOST` | `0.0.0.0` | Bind address (Gunicorn listens here) |
 | `PORT` | `21223` | Bind port |
 | `DEBUG` | `false` | Flask debug mode — **never enable in production** |
-| `ELECTRUM_HOST` | `electrumx.bitwebcore.net` | ElectrumX hostname |
+| `ELECTRUM_HOST` | `electrumx.example.com` | ElectrumX hostname |
 | `ELECTRUM_PORT` | `20002` | ElectrumX TLS port |
 | `ELECTRUM_TIMEOUT` | `15` | Per-call timeout in seconds |
 | `ELECTRUM_VERIFY_SSL` | `true` | Set `false` only for self-signed certs |
@@ -237,7 +217,7 @@ HOST=0.0.0.0
 PORT=21223
 DEBUG=false
 
-ELECTRUM_HOST=electrumx.bitwebcore.net
+ELECTRUM_HOST=electrumx.example.com
 ELECTRUM_PORT=20002
 ELECTRUM_TIMEOUT=15
 ELECTRUM_VERIFY_SSL=true
@@ -276,7 +256,7 @@ sudo journalctl -u bitweb-api --since today
 ```bash
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # edit as needed
+cp env.example .env   # edit as needed
 python app.py
 ```
 
@@ -289,8 +269,7 @@ python3 test_address.py
 ```
 
 Tests cover base58check decoding, all version bytes (mainnet/testnet P2PKH and
-P2SH), bech32 P2WPKH/P2WSH with all supported HRPs (`web`, `tugar`), and
-script-hash derivation.
+P2SH), bech32 P2WPKH/P2WSH with the `web` HRP, and script-hash derivation.
 
 ---
 
@@ -299,9 +278,9 @@ script-hash derivation.
 ```
 .
 ├── app.py              Entry point (gevent monkey-patch + gunicorn target)
-├── config.py           Configuration loader (reads from .env)
+├── config.py           Configuration loader (excluded from git — create manually on deploy)
 ├── requirements.txt    Python dependencies
-├── .env.example        Configuration template
+├── env.example         Configuration template
 ├── server/
 │   ├── __init__.py     Flask app factory, SocketIO init
 │   ├── rest.py         All REST routes + WebSocket event handlers
@@ -310,7 +289,7 @@ script-hash derivation.
 │   ├── segwit_addr.py  Bech32 / Bech32m reference implementation
 │   └── utils.py        JSON response helpers
 ├── test_address.py     Unit tests for address.py
-└── api.bitwebcore.txt  Production Nginx config example
+└── api2.bitwebcore.example  Production Nginx config example
 ```
 
 ---

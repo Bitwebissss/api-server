@@ -13,6 +13,7 @@ POST /broadcast                Broadcast raw transaction hex
 """
 
 import logging
+import os
 import gevent
 import gevent.pool
 import re
@@ -26,48 +27,68 @@ from flask_socketio import join_room, leave_room
 from server.electrum import ElectrumPool, ElectrumSubscriber
 from server.address  import address_to_scripthash, address_to_scriptpubkey
 from server          import utils, socketio
-import config
 
 log = logging.getLogger(__name__)
 
-# Module-level state — intentionally private (_) to prevent accidental import
+def _env_int(key, default):
+    try:
+        return int(os.environ[key])
+    except (KeyError, ValueError):
+        return default
+
+def _env_bool(key, default):
+    val = os.environ.get(key, "").strip().lower()
+    if val in ("1", "true", "yes"):
+        return True
+    if val in ("0", "false", "no"):
+        return False
+    return default
+
+_ELECTRUM_HOST      = os.environ.get("ELECTRUM_HOST",    "electrumx.example.com")
+_ELECTRUM_PORT      = _env_int("ELECTRUM_PORT",           20002)
+_ELECTRUM_TIMEOUT   = _env_int("ELECTRUM_TIMEOUT",        15)
+_ELECTRUM_VERIFY_SSL = _env_bool("ELECTRUM_VERIFY_SSL",   True)
+_ELECTRUM_POOL_SIZE = _env_int("ELECTRUM_POOL_SIZE",      4)
+_FIXED_FEE_SATOSHIS = _env_int("FIXED_FEE_SATOSHIS",      10000)
+
+# Module-level state  -  intentionally private (_) to prevent accidental import
 
 _pool = ElectrumPool(
-    host       = config.ELECTRUM_HOST,
-    port       = config.ELECTRUM_PORT,
-    timeout    = config.ELECTRUM_TIMEOUT,
-    verify_ssl = config.ELECTRUM_VERIFY_SSL,
-    size       = config.ELECTRUM_POOL_SIZE,
+    host       = _ELECTRUM_HOST,
+    port       = _ELECTRUM_PORT,
+    timeout    = _ELECTRUM_TIMEOUT,
+    verify_ssl = _ELECTRUM_VERIFY_SSL,
+    size       = _ELECTRUM_POOL_SIZE,
 )
 
 _subscriber = ElectrumSubscriber(
-    host       = config.ELECTRUM_HOST,
-    port       = config.ELECTRUM_PORT,
-    timeout    = config.ELECTRUM_TIMEOUT,
-    verify_ssl = config.ELECTRUM_VERIFY_SSL,
+    host       = _ELECTRUM_HOST,
+    port       = _ELECTRUM_PORT,
+    timeout    = _ELECTRUM_TIMEOUT,
+    verify_ssl = _ELECTRUM_VERIFY_SSL,
 )
 
 bp = Blueprint("api", __name__)
 
-# Coinbase cache {txid: bool} — immutable once mined, never invalidated.
+# Coinbase cache {txid: bool}  -  immutable once mined, never invalidated.
 # Bounded to MAX_COINBASE_CACHE_SIZE; oldest half evicted when full (~20 MB max).
 _coinbase_cache: dict[str, bool] = {}
 _coinbase_lock  = threading.Lock()
 MAX_COINBASE_CACHE_SIZE = 100_000
 
-# Tip height cache — populated by on_new_block, TTL-refreshed on cache miss.
+# Tip height cache  -  populated by on_new_block, TTL-refreshed on cache miss.
 _tip_cache: dict = {}  # {"height": int, "expires": float}
 _tip_lock  = threading.Lock()
 _TIP_TTL   = 5.0       # seconds
 
-# Verbose TX cache — confirmed TXs are immutable, cached indefinitely.
+# Verbose TX cache  -  confirmed TXs are immutable, cached indefinitely.
 # Bounded to MAX_TX_CACHE_SIZE; oldest half evicted when full.
 _tx_cache: dict[str, dict] = {}
 _tx_cache_lock = threading.Lock()
 MAX_TX_CACHE_SIZE = 50_000
 
 # History cache {scripthash: raw_history_list}.
-# Eliminates the dominant source of pool exhaustion under load — without it
+# Eliminates the dominant source of pool exhaustion under load  -  without it
 # every /history request hits ElectrumX even when nothing changed.
 # Invalidated in on_scripthash_change().
 _history_cache: dict[str, list] = {}
@@ -119,7 +140,7 @@ def get_tip_height() -> int:
 def is_coinbase_tx(txid: str) -> bool:
     """
     Return True if txid is a coinbase transaction.
-    Uses in-memory cache — fetches full TX at most once per txid.
+    Uses in-memory cache  -  fetches full TX at most once per txid.
     """
     with _coinbase_lock:
         if txid in _coinbase_cache:
@@ -248,13 +269,13 @@ def vout_to_satoshis(vout_entry: dict) -> int:
 def validate_address(address: str):
     """Raise ValueError if address looks obviously wrong before hitting ElectrumX."""
     if not address or not _RE_ADDRESS.match(address):
-        raise ValueError("Invalid address format — expected alphanumeric, 25-90 characters")
+        raise ValueError("Invalid address format  -  expected alphanumeric, 25-90 characters")
 
 
 def validate_txid(txid: str):
     """Raise ValueError if txid is not exactly 64 hex chars."""
     if not txid or not _RE_TXID.match(txid):
-        raise ValueError("Invalid txid — expected 64 hex characters")
+        raise ValueError("Invalid txid  -  expected 64 hex characters")
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +345,7 @@ def get_unspent(address: str):
         log.exception("GET /unspent/%s", address)
         return jsonify(utils.err(500, str(exc))), 500
 
-    # Filter before enriching — don't call is_coinbase_tx for discarded UTXOs
+    # Filter before enriching  -  don't call is_coinbase_tx for discarded UTXOs
     filtered = [
         u for u in utxos
         if not (confirmed_only and u["height"] == 0)
@@ -352,7 +373,7 @@ def get_unspent(address: str):
 @bp.route("/fee", methods=["GET"])
 @cross_origin()
 def get_fee():
-    return jsonify(utils.ok({"feerate": config.FIXED_FEE_SATOSHIS}))
+    return jsonify(utils.ok({"feerate": _FIXED_FEE_SATOSHIS}))
 
 
 @bp.route("/tx/<string:txid>", methods=["GET"])
@@ -387,24 +408,24 @@ def get_history(address: str):
     """
     Return last N transactions for address, annotated with direction and amount.
 
-    Algorithm (same as Electrum wallet — works for Legacy, SegWit, Taproot,
+    Algorithm (same as Electrum wallet  -  works for Legacy, SegWit, Taproot,
     multi-send, consolidation, send-to-self):
 
-      1. blockchain.scripthash.get_history  → list of {tx_hash, height}
+      1. blockchain.scripthash.get_history  -> list of {tx_hash, height}
       2. blockchain.transaction.get(txid, verbose=True) for each recent TX
       3. For every non-coinbase vin, fetch the previous TX to read the prevout.
       4. Direction:
-           mine_in  = Σ value of inputs  whose prevout address == our address
-           mine_out = Σ value of outputs whose address         == our address
+           mine_in  = sum of value of inputs  whose prevout address == our address
+           mine_out = sum of value of outputs whose address         == our address
 
-           mine_in > 0, mine_out >= mine_in     → 'self'
+           mine_in > 0, mine_out >= mine_in     -> 'self'
            mine_in > 0, has external out,
-                        mine_out < mine_in       → 'out'  (net = mine_in − mine_out)
-           mine_in == 0, mine_out > 0            → 'in'
-           otherwise                             → 'unknown'
+                        mine_out < mine_in       -> 'out'  (net = mine_in - mine_out)
+           mine_in == 0, mine_out > 0            -> 'in'
+           otherwise                             -> 'unknown'
 
     Query params:
-      limit — max entries returned (default 10, max 50)
+      limit  -  max entries returned (default 10, max 50)
     """
     try:
         limit = min(int(request.args.get("limit", 10)), 50)
@@ -439,8 +460,8 @@ def get_history(address: str):
             if height < -1:
                 continue          # undefined by ElectrumX protocol
             if height == -1:
-                h = dict(h, height=0)  # mempool TX with unconfirmed inputs → normalise
-            # Deduplicate by txid — during a reorg ElectrumX can return the same
+                h = dict(h, height=0)  # mempool TX with unconfirmed inputs -> normalise
+            # Deduplicate by txid  -  during a reorg ElectrumX can return the same
             # txid twice. Keep the first occurrence (confirmed takes priority).
             if h["tx_hash"] not in seen:
                 seen.add(h["tx_hash"])
@@ -455,7 +476,7 @@ def get_history(address: str):
                     del _tx_cache[h["tx_hash"]]
 
     except Exception as exc:
-        log.exception("GET /history/%s — history fetch", address)
+        log.exception("GET /history/%s  -  history fetch", address)
         return jsonify(utils.err(500, str(exc))), 500
 
     recent = history[-limit:][::-1]  # most-recent N, newest first
@@ -600,7 +621,7 @@ def broadcast():
 
 
 # ---------------------------------------------------------------------------
-# WebSocket — socket.io events
+# WebSocket  -  socket.io events
 # ---------------------------------------------------------------------------
 
 @socketio.on("connect")
@@ -665,7 +686,7 @@ def ws_on_subscribe(data):
     _subscriber.subscribe_scripthash(scripthash)
     socketio.emit("subscribed", {"address": address}, to=request.sid)
 
-    sid = request.sid  # capture before greenlet — request context is gone inside
+    sid = request.sid  # capture before greenlet  -  request context is gone inside
 
     def send_initial():
         try:
@@ -715,12 +736,12 @@ def ws_on_subscribe(data):
 def on_new_block(height: int) -> None:
     _tip_cache["height"]  = height
     _tip_cache["expires"] = time.monotonic() + _TIP_TTL
-    log.info("New block: height=%d — pushing to all WS clients", height)
+    log.info("New block: height=%d  -  pushing to all WS clients", height)
     socketio.emit("block", {"height": height})
 
 
 def on_scripthash_change(scripthash: str) -> None:
-    log.debug("Balance changed: scripthash=%s…", scripthash[:12])
+    log.debug("Balance changed: scripthash=%s...", scripthash[:12])
 
     with _history_cache_lock:
         _history_cache.pop(scripthash, None)

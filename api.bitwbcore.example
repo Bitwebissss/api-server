@@ -3,11 +3,11 @@ limit_req_zone $binary_remote_addr zone=bitweb_broadcast:10m rate=20r/m;
 limit_req_zone $binary_remote_addr zone=bitweb_ws:10m rate=10r/m;
 
 server {
-    server_name api2.bitwebcore.net;
+    server_name api.example.com;
     listen 443 ssl;
 
-    ssl_certificate     /etc/letsencrypt/live/api2.bitwebcore.net/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api2.bitwebcore.net/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/api.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
     include             /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
 
@@ -127,6 +127,6 @@ server {
 
 server {
     listen 80;
-    server_name api2.bitwebcore.net;
+    server_name api.example.com;
     return 301 https://$host$request_uri;
 }
